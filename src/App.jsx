@@ -20,14 +20,14 @@ export default function App() {
       const { data, error } = await supabase
         .from('keywords')
         .select(
-          'id, english, vietnamese, keyword_categories(id, name, vietnamese), keyword_levels(name, vietnamese, sort_order)'
+          'id, name, vietnamese, keyword_categories(id, name, vietnamese), keyword_levels(name, vietnamese, sort_order)'
         )
 
       if (error) {
         setError(error.message)
       } else {
         const mapped = data.map((r) => ({
-          english: r.english,
+          english: r.name,
           vietnamese: r.vietnamese,
           categoryId: r.keyword_categories?.id ?? 0,
           category: r.keyword_categories?.name ?? '',
