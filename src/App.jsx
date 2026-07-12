@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 
 const LEVEL_ORDER = { Easy: 0, Medium: 1, Hard: 2 }
+const PAGE_SIZE = 100
 
 export default function App() {
   const [rows, setRows] = useState([])
@@ -13,6 +14,7 @@ export default function App() {
   const [activeLvl, setActiveLvl] = useState(null)
   const [sortKey, setSortKey] = useState('index')
   const [sortDir, setSortDir] = useState(1)
+  const [page, setPage] = useState(0)
 
   useEffect(() => {
     async function load() {
@@ -92,6 +94,22 @@ export default function App() {
     return list
   }, [rows, query, activeCat, activeLvl, sortKey, sortDir])
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount - 1)
+  const paged = useMemo(
+    () =>
+      filtered.slice(
+        currentPage * PAGE_SIZE,
+        currentPage * PAGE_SIZE + PAGE_SIZE
+      ),
+    [filtered, currentPage]
+  )
+
+  // Jump back to the first page whenever the filters/search change the result set
+  useEffect(() => {
+    setPage(0)
+  }, [query, activeCat, activeLvl])
+
   function toggleSort(key) {
     if (sortKey === key) setSortDir((d) => -d)
     else { setSortKey(key); setSortDir(1) }
@@ -122,39 +140,51 @@ export default function App() {
         <Stat value={levelCounts.Easy} label="easy" tone="easy" />
         <Stat value={levelCounts.Medium} label="medium" tone="medium" />
         <Stat value={levelCounts.Hard} label="hard" tone="hard" />
-        <Stat value={filtered.length} label="shown" />
       </section>
 
       <section className="controls">
-        <input
-          type="search"
-          placeholder="Search English / Tiếng Việt…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="chips">
-          {categories.map((c) => (
-            <button
-              key={c.name}
-              className={'chip' + (activeCat === c.name ? ' on' : '')}
-              onClick={() => setActiveCat(activeCat === c.name ? null : c.name)}
-              title={c.vi}
-            >
-              {c.name}
-            </button>
-          ))}
+        <div className="control-group control-search">
+          <label className="control-label">Search</label>
+          <input
+            type="search"
+            placeholder="Search English / Tiếng Việt…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
         </div>
-        <div className="chips">
-          {levels.map((l) => (
-            <button
-              key={l.name}
-              className={'chip lvl-chip ' + l.name + (activeLvl === l.name ? ' on' : '')}
-              onClick={() => setActiveLvl(activeLvl === l.name ? null : l.name)}
-              title={l.vi}
-            >
-              {l.name}
-            </button>
-          ))}
+
+        <div className="control-group">
+          <label className="control-label">Category</label>
+          <div className="chips">
+            {categories.map((c) => (
+              <button
+                key={c.name}
+                className={'chip' + (activeCat === c.name ? ' on' : '')}
+                onClick={() => setActiveCat(activeCat === c.name ? null : c.name)}
+                title={c.vi}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="control-group">
+          <label className="control-label">Level</label>
+          <div className="chips">
+            {levels.map((l) => (
+              <button
+                key={l.name}
+                className={
+                  'chip lvl-chip ' + l.name + (activeLvl === l.name ? ' on' : '')
+                }
+                onClick={() => setActiveLvl(activeLvl === l.name ? null : l.name)}
+                title={l.vi}
+              >
+                {l.name}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -175,7 +205,7 @@ export default function App() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
+            {paged.map((r) => (
               <tr key={r.index}>
                 <td className="num">{r.index}</td>
                 <td>{r.english}</td>
@@ -197,6 +227,31 @@ export default function App() {
           <div className="empty">No keywords match the current filters.</div>
         )}
       </section>
+
+      <div className="pagination">
+        <button
+          className="pg-btn"
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
+          disabled={currentPage === 0}
+          aria-label="Previous page"
+        >
+          ←
+        </button>
+        <span className="pg-info">
+          Page <b>{currentPage + 1}</b> of {pageCount}
+        </span>
+        <button
+          className="pg-btn"
+          onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+          disabled={currentPage >= pageCount - 1}
+          aria-label="Next page"
+        >
+          →
+        </button>
+        <span className="pg-spacer" />
+        <span className="pg-meta">{PAGE_SIZE} rows</span>
+        <span className="pg-meta">{filtered.length} records</span>
+      </div>
     </div>
   )
 }
