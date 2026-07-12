@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { translations } from './i18n'
 
 const LEVEL_ORDER = { Easy: 0, Medium: 1, Hard: 2 }
 const PAGE_SIZE = 100
 
 export default function App() {
+  const [lang, setLang] = useState(
+    () => localStorage.getItem('lang') || 'en'
+  )
+  const t = translations[lang] || translations.en
+
+  useEffect(() => {
+    localStorage.setItem('lang', lang)
+    document.documentElement.lang = lang
+  }, [lang])
+
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -15,6 +26,7 @@ export default function App() {
   const [sortKey, setSortKey] = useState('index')
   const [sortDir, setSortDir] = useState(1)
   const [page, setPage] = useState(0)
+  const [showIssuesOnly, setShowIssuesOnly] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -73,26 +85,64 @@ export default function App() {
     return c
   }, [rows])
 
+  // Data-quality scan: flag duplicate (case-insensitive) or blank keywords.
+  // Returns a Map of row index -> human-readable reason for the problem.
+  const issues = useMemo(() => {
+    const enCount = new Map()
+    const viCount = new Map()
+    for (const r of rows) {
+      const en = r.english.trim().toLowerCase()
+      const vi = r.vietnamese.trim().toLowerCase()
+      if (en) enCount.set(en, (enCount.get(en) || 0) + 1)
+      if (vi) viCount.set(vi, (viCount.get(vi) || 0) + 1)
+    }
+    const byIndex = new Map()
+    for (const r of rows) {
+      const en = r.english.trim()
+      const vi = r.vietnamese.trim()
+      const reasons = []
+      if (!en || !vi) reasons.push('missing')
+      if (en && enCount.get(en.toLowerCase()) > 1) reasons.push('dupEn')
+      if (vi && viCount.get(vi.toLowerCase()) > 1) reasons.push('dupVi')
+      if (reasons.length) byIndex.set(r.index, reasons)
+    }
+    return byIndex
+  }, [rows])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     let list = rows.filter(
       (r) =>
         (!activeCat || r.category === activeCat) &&
         (!activeLvl || r.level === activeLvl) &&
+        (!showIssuesOnly || issues.has(r.index)) &&
         (!q ||
           r.english.toLowerCase().includes(q) ||
           r.vietnamese.toLowerCase().includes(q))
     )
+    const sortVal = (r) => {
+      switch (sortKey) {
+        case 'keyword':
+          return lang === 'vi' ? r.vietnamese : r.english
+        case 'category':
+          return lang === 'vi' ? r.categoryVi : r.category
+        case 'level':
+          return LEVEL_ORDER[r.level] ?? 9
+        default:
+          return r.index
+      }
+    }
     list = [...list].sort((a, b) => {
-      let x = a[sortKey]
-      let y = b[sortKey]
-      if (sortKey === 'level') { x = LEVEL_ORDER[x] ?? 9; y = LEVEL_ORDER[y] ?? 9 }
-      if (x > y) return sortDir
-      if (x < y) return -sortDir
-      return 0
+      const x = sortVal(a)
+      const y = sortVal(b)
+      const cmp =
+        typeof x === 'number' && typeof y === 'number'
+          ? x - y
+          : String(x).localeCompare(String(y), lang === 'vi' ? 'vi' : 'en')
+      return cmp * sortDir
     })
     return list
-  }, [rows, query, activeCat, activeLvl, sortKey, sortDir])
+  }, [rows, query, activeCat, activeLvl, showIssuesOnly, issues, sortKey, sortDir, lang])
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount - 1)
@@ -108,7 +158,12 @@ export default function App() {
   // Jump back to the first page whenever the filters/search change the result set
   useEffect(() => {
     setPage(0)
-  }, [query, activeCat, activeLvl])
+  }, [query, activeCat, activeLvl, showIssuesOnly])
+
+  // If issues get resolved while the issues-only view is active, drop the filter
+  useEffect(() => {
+    if (showIssuesOnly && issues.size === 0) setShowIssuesOnly(false)
+  }, [showIssuesOnly, issues])
 
   function toggleSort(key) {
     if (sortKey === key) setSortDir((d) => -d)
@@ -116,61 +171,98 @@ export default function App() {
   }
 
   const cols = [
-    { key: 'index', label: '#' },
-    { key: 'english', label: 'English' },
-    { key: 'vietnamese', label: 'Tiếng Việt' },
-    { key: 'category', label: 'Category' },
-    { key: 'level', label: 'Level' },
+    { key: 'keyword', label: t.cols.keyword },
+    { key: 'category', label: t.cols.category },
+    { key: 'level', label: t.cols.level },
   ]
 
   return (
     <div className="page">
       <header>
         <h1>Nine Games — Keywords</h1>
-        <p className="sub">
-          Charades &amp; guessing keywords · live from Supabase
-        </p>
+        <p className="sub">{t.subtitle}</p>
       </header>
 
-      {error && <div className="error">Could not load data: {error}</div>}
+      {error && (
+        <div className="error">
+          {t.errorPrefix} {error}
+        </div>
+      )}
 
       <section className="stats">
-        <Stat value={rows.length} label="total keywords" />
-        <Stat value={categories.length} label="categories" />
-        <Stat value={levelCounts.Easy} label="easy" tone="easy" />
-        <Stat value={levelCounts.Medium} label="medium" tone="medium" />
-        <Stat value={levelCounts.Hard} label="hard" tone="hard" />
+        <Stat value={rows.length} label={t.stats.total} />
+        <Stat value={categories.length} label={t.stats.categories} />
+        <Stat value={levelCounts.Easy} label={t.stats.easy} tone="easy" />
+        <Stat value={levelCounts.Medium} label={t.stats.medium} tone="medium" />
+        <Stat value={levelCounts.Hard} label={t.stats.hard} tone="hard" />
+        <button
+          type="button"
+          className={
+            'stat stat-btn' +
+            (issues.size ? ' has-issues' : '') +
+            (showIssuesOnly ? ' active' : '')
+          }
+          onClick={() => issues.size && setShowIssuesOnly((v) => !v)}
+          disabled={!issues.size}
+          title={issues.size ? t.issuesTooltip : t.noIssuesTooltip}
+        >
+          <b className={issues.size ? 'tone-hard' : 'tone-easy'}>
+            {issues.size}
+          </b>
+          <span>
+            {issues.size ? '⚠ ' : '✓ '}
+            {t.stats.issues}
+          </span>
+        </button>
       </section>
 
       <section className="controls">
         <div className="control-group control-search">
-          <label className="control-label">Search</label>
+          <label className="control-label">{t.search}</label>
           <input
             type="search"
-            placeholder="Search English / Tiếng Việt…"
+            placeholder={t.searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
 
         <div className="control-group">
-          <label className="control-label">Category</label>
+          <label className="control-label">{t.language}</label>
+          <div className="chips">
+            <button
+              className={'chip' + (lang === 'en' ? ' on' : '')}
+              onClick={() => setLang('en')}
+            >
+              English
+            </button>
+            <button
+              className={'chip' + (lang === 'vi' ? ' on' : '')}
+              onClick={() => setLang('vi')}
+            >
+              Tiếng Việt
+            </button>
+          </div>
+        </div>
+
+        <div className="control-group">
+          <label className="control-label">{t.category}</label>
           <div className="chips">
             {categories.map((c) => (
               <button
                 key={c.name}
                 className={'chip' + (activeCat === c.name ? ' on' : '')}
                 onClick={() => setActiveCat(activeCat === c.name ? null : c.name)}
-                title={c.vi}
+                title={lang === 'vi' ? c.name : c.vi}
               >
-                {c.name}
+                {lang === 'vi' ? c.vi : c.name}
               </button>
             ))}
           </div>
         </div>
 
         <div className="control-group">
-          <label className="control-label">Level</label>
+          <label className="control-label">{t.level}</label>
           <div className="chips">
             {levels.map((l) => (
               <button
@@ -181,7 +273,7 @@ export default function App() {
                 onClick={() => setActiveLvl(activeLvl === l.name ? null : l.name)}
                 title={l.vi}
               >
-                {l.name}
+                {t.levels[l.name] || l.name}
               </button>
             ))}
           </div>
@@ -206,25 +298,34 @@ export default function App() {
           </thead>
           <tbody>
             {paged.map((r) => (
-              <tr key={r.index}>
-                <td className="num">{r.index}</td>
-                <td>{r.english}</td>
-                <td>{r.vietnamese}</td>
+              <tr key={r.index} className={issues.has(r.index) ? 'row-issue' : ''}>
                 <td>
-                  {r.category}
-                  <span className="muted"> · {r.categoryVi}</span>
+                  {lang === 'vi' ? r.vietnamese : r.english}
+                  {issues.has(r.index) && (
+                    <span
+                      className="issue-flag"
+                      title={issues
+                        .get(r.index)
+                        .map((k) => t.reasons[k])
+                        .join(' · ')}
+                    >
+                      ⚠
+                    </span>
+                  )}
                 </td>
+                <td>{lang === 'vi' ? r.categoryVi : r.category}</td>
                 <td>
-                  <span className={'lvl ' + r.level}>{r.level}</span>
-                  <span className="muted"> {r.levelVi}</span>
+                  <span className={'lvl ' + r.level}>
+                    {t.levels[r.level] || r.level}
+                  </span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {loading && <div className="empty">Loading keywords…</div>}
+        {loading && <div className="empty">{t.loading}</div>}
         {!loading && filtered.length === 0 && (
-          <div className="empty">No keywords match the current filters.</div>
+          <div className="empty">{t.noMatch}</div>
         )}
       </section>
 
@@ -238,7 +339,8 @@ export default function App() {
           ←
         </button>
         <span className="pg-info">
-          Page <b>{currentPage + 1}</b> of {pageCount}
+          {t.pagination.page} <b>{currentPage + 1}</b> {t.pagination.of}{' '}
+          {pageCount}
         </span>
         <button
           className="pg-btn"
@@ -249,8 +351,12 @@ export default function App() {
           →
         </button>
         <span className="pg-spacer" />
-        <span className="pg-meta">{PAGE_SIZE} rows</span>
-        <span className="pg-meta">{filtered.length} records</span>
+        <span className="pg-meta">
+          {PAGE_SIZE} {t.pagination.rows}
+        </span>
+        <span className="pg-meta">
+          {filtered.length} {t.pagination.records}
+        </span>
       </div>
     </div>
   )

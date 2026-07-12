@@ -106,6 +106,31 @@ header h1 {
     color: var(--hard);
 }
 
+/* Clickable "Issues" stat tile */
+.stat-btn {
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    transition:
+        border-color 0.12s,
+        background 0.12s;
+}
+.stat-btn:disabled {
+    cursor: default;
+}
+.stat-btn.has-issues {
+    border-color: var(--hard);
+    background: var(--hard-bg);
+}
+.stat-btn.has-issues:hover {
+    border-color: var(--hard);
+    filter: brightness(0.98);
+}
+.stat-btn.active {
+    outline: 2px solid var(--hard);
+    outline-offset: 1px;
+}
+
 .controls {
     display: flex;
     flex-direction: column;
@@ -255,6 +280,18 @@ th.num {
     color: var(--muted);
 }
 
+/* Rows flagged by the data-quality scan */
+.row-issue td {
+    background: var(--hard-bg) !important;
+    box-shadow: inset 3px 0 0 var(--hard);
+}
+.issue-flag {
+    margin-left: 6px;
+    color: var(--hard);
+    cursor: help;
+    font-size: 13px;
+}
+
 .pagination {
     display: flex;
     align-items: center;
@@ -303,4 +340,41 @@ th.num {
     border-radius: 8px;
     padding: 5px 10px;
     background: var(--bg);
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 640px) {
+    .page {
+        padding: 18px 14px 48px;
+    }
+    header h1 {
+        font-size: 19px;
+    }
+    .stat {
+        flex: 1 1 calc(33% - 8px);
+        min-width: 0;
+        padding: 9px 12px;
+    }
+    .stat b {
+        font-size: 18px;
+    }
+    input[type="search"] {
+        width: 100%;
+    }
+    .tablewrap {
+        max-height: none;
+    }
+    th,
+    td {
+        padding: 9px 12px;
+    }
+    .pagination {
+        flex-wrap: wrap;
+    }
+    .pg-spacer {
+        display: none;
+    }
+    .pg-meta {
+        margin-left: auto;
+    }
 }
