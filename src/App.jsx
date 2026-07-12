@@ -34,7 +34,7 @@ export default function App() {
       const { data, error } = await supabase
         .from('keywords')
         .select(
-          'id, name, vietnamese, keyword_categories(id, name, vietnamese), keyword_levels(name, vietnamese, sort_order)'
+          'id, name, vietnamese, keyword_categories(id, name, vietnamese, sort_order), keyword_levels(name, vietnamese, sort_order)'
         )
 
       if (error) {
@@ -43,7 +43,8 @@ export default function App() {
         const mapped = data.map((r) => ({
           english: r.name,
           vietnamese: r.vietnamese,
-          categoryId: r.keyword_categories?.id ?? 0,
+          categoryId: r.keyword_categories?.id ?? '',
+          categoryOrder: r.keyword_categories?.sort_order ?? 999,
           category: r.keyword_categories?.name ?? '',
           categoryVi: r.keyword_categories?.vietnamese ?? '',
           level: r.keyword_levels?.name ?? '',
@@ -53,7 +54,7 @@ export default function App() {
         // Default order: grouped by category, then Easy → Hard, then A→Z
         mapped.sort(
           (a, b) =>
-            a.categoryId - b.categoryId ||
+            a.categoryOrder - b.categoryOrder ||
             a.levelOrder - b.levelOrder ||
             a.english.localeCompare(b.english)
         )

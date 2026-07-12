@@ -9,7 +9,7 @@ export const translations = {
         label: "English",
         subtitle: "Charades & guessing keywords · live from Supabase",
         stats: {
-            total: "total keywords",
+            total: "keywords",
             categories: "categories",
             easy: "easy",
             medium: "medium",
@@ -48,7 +48,7 @@ export const translations = {
         label: "Tiếng Việt",
         subtitle: "Từ khóa đố chữ & đoán từ · trực tiếp từ Supabase",
         stats: {
-            total: "tổng từ khóa",
+            total: "từ khóa",
             categories: "chủ đề",
             easy: "dễ",
             medium: "trung bình",
