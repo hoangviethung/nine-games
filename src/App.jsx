@@ -49,16 +49,32 @@ export default function App() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('keywords')
-        .select(
-          'id, name, vietnamese, keyword_categories(id, name, vietnamese, sort_order), keyword_levels(name, vietnamese, sort_order)'
-        )
+      // PostgREST returns at most 1000 rows per request, so page through all of them.
+      const CHUNK = 1000
+      const select =
+        'id, name, vietnamese, keyword_categories(id, name, vietnamese, sort_order), keyword_levels(name, vietnamese, sort_order)'
+      let all = []
+      let from = 0
+      let fetchError = null
+      for (;;) {
+        const { data, error } = await supabase
+          .from('keywords')
+          .select(select)
+          .order('id', { ascending: true })
+          .range(from, from + CHUNK - 1)
+        if (error) {
+          fetchError = error
+          break
+        }
+        all = all.concat(data)
+        if (data.length < CHUNK) break
+        from += CHUNK
+      }
 
-      if (error) {
-        setError(error.message)
+      if (fetchError) {
+        setError(fetchError.message)
       } else {
-        const mapped = data.map((r) => ({
+        const mapped = all.map((r) => ({
           english: r.name,
           vietnamese: r.vietnamese,
           categoryId: r.keyword_categories?.id ?? '',
@@ -485,7 +501,7 @@ export default function App() {
           {PAGE_SIZE} {t.pagination.rows}
         </span>
         <span className="pg-meta">
-          {filtered.length} {t.pagination.records}
+          {filtered.length.toLocaleString('en-US')} {t.pagination.records}
         </span>
       </div>
 
@@ -577,9 +593,11 @@ export default function App() {
 }
 
 function Stat({ value, label, tone }) {
+  const display =
+    typeof value === 'number' ? value.toLocaleString('en-US') : value
   return (
     <div className="stat">
-      <b className={tone ? 'tone-' + tone : ''}>{value}</b>
+      <b className={tone ? 'tone-' + tone : ''}>{display}</b>
       <span>{label}</span>
     </div>
   )
