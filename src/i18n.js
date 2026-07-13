@@ -7,7 +7,7 @@ export const LANGS = ["en", "vi"];
 export const translations = {
     en: {
         label: "English",
-        subtitle: "Charades & guessing keywords · live from Supabase",
+        subtitle: "Pick a word, act it out, let them guess — your ready-made deck for game night.",
         stats: {
             total: "keywords",
             categories: "categories",
@@ -62,7 +62,7 @@ export const translations = {
     },
     vi: {
         label: "Tiếng Việt",
-        subtitle: "Từ khóa đố chữ & đoán từ · trực tiếp từ Supabase",
+        subtitle: "Chọn một từ, diễn tả, để cả nhóm cùng đoán — bộ từ sẵn sàng cho buổi chơi game.",
         stats: {
             total: "từ khóa",
             categories: "chủ đề",

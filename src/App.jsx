@@ -286,14 +286,6 @@ export default function App() {
             <span className="played-count">{played.length}</span>
             <button
               type="button"
-              className="played-add"
-              onClick={openPicker}
-              disabled={!pickPool.length}
-            >
-              + {t.picker.pickAnother}
-            </button>
-            <button
-              type="button"
               className="played-clear"
               onClick={() => setPlayedNames([])}
             >

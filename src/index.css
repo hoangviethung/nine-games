@@ -137,35 +137,25 @@ header h1 {
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
-.played-add {
+.played-clear {
     margin-left: auto;
-    border: 1px solid var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--border);
     background: var(--card);
-    color: var(--accent);
+    color: var(--muted);
     border-radius: 8px;
     padding: 5px 12px;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-}
-.played-add:hover:not(:disabled) {
-    background: var(--accent);
-    color: #fff;
-}
-.played-add:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-.played-clear {
-    border: none;
-    background: transparent;
-    color: var(--muted);
-    font-size: 13px;
-    cursor: pointer;
-    text-decoration: underline;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
 }
 .played-clear:hover {
+    border-color: var(--hard);
     color: var(--hard);
+    background: var(--hard-bg);
 }
 .played-list {
     display: flex;
