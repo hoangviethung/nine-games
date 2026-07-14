@@ -541,15 +541,15 @@ input[type="search"]:focus {
     border-color: var(--chip-on);
     color: #fff;
 }
-.lvl-chip.Easy.on {
+.lvl-chip.easy.on {
     background: var(--easy);
     border-color: var(--easy);
 }
-.lvl-chip.Medium.on {
+.lvl-chip.medium.on {
     background: var(--medium);
     border-color: var(--medium);
 }
-.lvl-chip.Hard.on {
+.lvl-chip.hard.on {
     background: var(--hard);
     border-color: var(--hard);
 }
@@ -612,15 +612,15 @@ th.num {
     font-size: 12px;
     font-weight: 600;
 }
-.lvl.Easy {
+.lvl.easy {
     color: var(--easy);
     background: var(--easy-bg);
 }
-.lvl.Medium {
+.lvl.medium {
     color: var(--medium);
     background: var(--medium-bg);
 }
-.lvl.Hard {
+.lvl.hard {
     color: var(--hard);
     background: var(--hard-bg);
 }
@@ -948,8 +948,9 @@ th.num {
     box-shadow: 0 0 0 2px var(--accent), 0 22px 52px rgba(179, 89, 31, 0.24);
 }
 
-/* Controls: swipe pills and the finish button share one slot and crossfade */
-.controls {
+/* Swipe pills and the finish button share one slot and crossfade.
+   Scoped name: the admin page owns the generic `.controls` class. */
+.game-controls {
     position: relative;
     height: 52px;
     width: 100%;
@@ -958,7 +959,7 @@ th.num {
     justify-content: center;
 }
 .swipe-actions,
-.controls .finish-btn {
+.game-controls .finish-btn {
     position: absolute;
     left: 50%;
     top: 50%;

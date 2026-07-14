@@ -1,10 +1,10 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { useKeywords } from './useKeywords'
-import { translations } from './i18n'
+import { translations, LOCALES, LANGS, PRIMARY, tr } from './i18n'
 
 const QUEUE_DEPTH = 3 // cards kept ready (top + 2 peeking behind)
 const SWIPE_THRESHOLD = 110 // px past which a release commits the swipe
-const HIST_KEY = 'gameHistory'
+const HIST_KEY = 'gameHistoryIds' // keyed by keyword id (names are translatable)
 const CARD_TRANSITION =
   'transform .32s cubic-bezier(.22,.61,.36,1), box-shadow .3s ease, opacity .3s ease'
 
@@ -29,9 +29,11 @@ function loadHistory() {
 export default function HomePage() {
   const { rows, loading, error } = useKeywords()
 
-  const [lang, setLang] = useState(() => localStorage.getItem('lang') || 'en')
-  const t = translations[lang] || translations.en
-  const vi = lang === 'vi'
+  const [lang, setLang] = useState(() => {
+    const saved = localStorage.getItem('lang')
+    return LANGS.includes(saved) ? saved : PRIMARY
+  })
+  const t = translations[lang] || translations[PRIMARY]
   useEffect(() => {
     localStorage.setItem('lang', lang)
     document.documentElement.lang = lang
@@ -53,21 +55,21 @@ export default function HomePage() {
   function refillQueue() {
     const all = rowsRef.current
     const playedSet = new Set(playedRef.current)
-    const inQueue = new Set(queueRef.current.map((r) => r.english))
+    const inQueue = new Set(queueRef.current.map((r) => r.id))
     let guard = 0
     while (queueRef.current.length < QUEUE_DEPTH && guard < all.length * 2 + 5) {
       guard++
       if (bagRef.current.length === 0) {
         const eligible = all
           .map((_, i) => i)
-          .filter((i) => !playedSet.has(all[i].english) && !inQueue.has(all[i].english))
+          .filter((i) => !playedSet.has(all[i].id) && !inQueue.has(all[i].id))
         if (eligible.length === 0) break
         bagRef.current = shuffle(eligible)
       }
       const row = all[bagRef.current.shift()]
-      if (playedSet.has(row.english) || inQueue.has(row.english)) continue
+      if (playedSet.has(row.id) || inQueue.has(row.id)) continue
       queueRef.current.push(row)
-      inQueue.add(row.english)
+      inQueue.add(row.id)
     }
   }
 
@@ -94,7 +96,7 @@ export default function HomePage() {
   }
   function doFinish() {
     if (playingRef.current) {
-      playedRef.current = [...playedRef.current, playingRef.current.english]
+      playedRef.current = [...playedRef.current, playingRef.current.id]
       persist()
     }
     queueRef.current = queueRef.current.slice(1)
@@ -103,8 +105,8 @@ export default function HomePage() {
     refillQueue()
     forceRender()
   }
-  function doRemove(name) {
-    playedRef.current = playedRef.current.filter((n) => n !== name)
+  function doRemove(id) {
+    playedRef.current = playedRef.current.filter((n) => n !== id)
     persist()
     forceRender()
   }
@@ -198,16 +200,19 @@ export default function HomePage() {
   const playing = phase === 'playing'
 
   function cardFace(row, footer) {
-    const lvlClass = 'lvl lvl-' + (row.level || '').toLowerCase()
+    const lvlClass = 'lvl lvl-' + (row.levelId || '').toLowerCase()
+    const main = tr(row.name, lang)
+    // Show English underneath as a hint, except when English *is* the shown one.
+    const sub = lang === PRIMARY ? '' : row.name?.[PRIMARY] || ''
     return (
       <>
         <div className="kw-card-head">
-          <span className="kw-cat">{vi ? row.categoryVi : row.category}</span>
-          <span className={lvlClass}>{vi ? row.levelVi : t.levels[row.level] || row.level}</span>
+          <span className="kw-cat">{tr(row.category, lang)}</span>
+          <span className={lvlClass}>{tr(row.level, lang)}</span>
         </div>
         <div className="kw-card-body">
-          <div className="kw-main">{vi ? row.vietnamese : row.english}</div>
-          <div className="kw-sub">{vi ? row.english : row.vietnamese}</div>
+          <div className="kw-main">{main}</div>
+          {sub && sub !== main && <div className="kw-sub">{sub}</div>}
         </div>
         {footer}
       </>
@@ -223,12 +228,20 @@ export default function HomePage() {
         <div className="home-actions">
           <button className="hist-btn" onClick={() => setHistOpen(true)}>
             <span className="hist-ico">🗂️</span>
-            {vi ? 'Đã chơi' : 'Played'}
+            {t.game.played}
             {played.length > 0 && <span className="hist-count">{played.length}</span>}
           </button>
           <div className="home-langs">
-            <button className={'lang-chip' + (lang === 'en' ? ' on' : '')} onClick={() => setLang('en')}>EN</button>
-            <button className={'lang-chip' + (lang === 'vi' ? ' on' : '')} onClick={() => setLang('vi')}>VI</button>
+            {LOCALES.map((l) => (
+              <button
+                key={l.code}
+                className={'lang-chip' + (lang === l.code ? ' on' : '')}
+                onClick={() => setLang(l.code)}
+                title={l.label}
+              >
+                {l.short}
+              </button>
+            ))}
           </div>
         </div>
       </header>
@@ -240,18 +253,16 @@ export default function HomePage() {
         {phase === 'swipe' && empty && (
           <div className="deck-done">
             <div className="deck-done-emoji">🏁</div>
-            <p>{vi ? 'Đã chơi hết từ khóa!' : 'Every keyword played!'}</p>
+            <p>{t.game.allPlayed}</p>
             <button className="deal-btn" onClick={doReset}>
-              {vi ? 'Chơi lại' : 'Reset game'}
+              {t.game.reset}
             </button>
           </div>
         )}
 
         {!empty && queue.length > 0 && (
           <div className="game">
-            <div className={'stage-badge' + (playing ? ' show' : '')}>
-              {vi ? 'ĐANG DIỄN' : 'NOW PLAYING'}
-            </div>
+            <div className={'stage-badge' + (playing ? ' show' : '')}>{t.game.nowPlaying}</div>
 
             <div className="deck">
               {queue
@@ -282,7 +293,7 @@ export default function HomePage() {
                   }
                   return (
                     <div
-                      key={row.english}
+                      key={row.id}
                       className={
                         'kw-card' + (isTop ? ' top' : ' back') + (isTop && playing ? ' is-playing' : '')
                       }
@@ -301,13 +312,13 @@ export default function HomePage() {
                                 className="decision-tag play"
                                 style={{ opacity: decision === 'play' ? decisionStrength : 0 }}
                               >
-                                {vi ? 'CHƠI' : 'PLAY'}
+                                {t.game.tagPlay}
                               </span>
                               <span
                                 className="decision-tag skip"
                                 style={{ opacity: decision === 'skip' ? decisionStrength : 0 }}
                               >
-                                {vi ? 'BỎ QUA' : 'SKIP'}
+                                {t.game.tagSkip}
                               </span>
                             </>
                           )
@@ -322,19 +333,19 @@ export default function HomePage() {
                 })}
             </div>
 
-            <div className="controls">
+            <div className="game-controls">
               <div className={'swipe-actions' + (playing ? ' gone' : '')}>
                 <button className="act act-skip" onClick={flingSkip}>
                   <span className="act-ico">✕</span>
-                  {vi ? 'Bỏ qua' : 'Skip'}
+                  {t.game.skip}
                 </button>
                 <button className="act act-play" onClick={pick}>
                   <span className="act-ico">▶</span>
-                  {vi ? 'Chơi từ này' : 'Play this'}
+                  {t.game.play}
                 </button>
               </div>
               <button className={'finish-btn' + (playing ? ' show' : '')} onClick={doFinish}>
-                {vi ? 'Xong, tiếp theo' : 'Done — next'}
+                {t.game.done}
               </button>
             </div>
           </div>
@@ -346,22 +357,24 @@ export default function HomePage() {
         <div className="hist-overlay" onClick={() => setHistOpen(false)}>
           <div className="hist-panel" onClick={(e) => e.stopPropagation()}>
             <div className="hist-head">
-              <h2>{vi ? 'Đã chơi' : 'Played'} ({played.length})</h2>
+              <h2>{t.game.played} ({played.length})</h2>
               <button className="hist-close" onClick={() => setHistOpen(false)}>✕</button>
             </div>
             {played.length === 0 ? (
-              <p className="hist-empty">{vi ? 'Chưa có từ nào.' : 'No keywords played yet.'}</p>
+              <p className="hist-empty">{t.game.noneYet}</p>
             ) : (
               <ul className="hist-list">
-                {played.map((name) => {
-                  const row = rows.find((r) => r.english === name)
+                {played.map((id) => {
+                  const row = rows.find((r) => r.id === id)
+                  const main = row ? tr(row.name, lang) : id
+                  const sub = lang === PRIMARY ? '' : row?.name?.[PRIMARY] || ''
                   return (
-                    <li key={name} className="hist-item">
+                    <li key={id} className="hist-item">
                       <span className="hist-name">
-                        {vi ? row?.vietnamese || name : name}
-                        <span className="hist-sub">{vi ? name : row?.vietnamese || ''}</span>
+                        {main}
+                        {sub && sub !== main && <span className="hist-sub">{sub}</span>}
                       </span>
-                      <button className="hist-del" onClick={() => doRemove(name)} aria-label="remove">✕</button>
+                      <button className="hist-del" onClick={() => doRemove(id)} aria-label={t.picker.remove}>✕</button>
                     </li>
                   )
                 })}
@@ -369,7 +382,7 @@ export default function HomePage() {
             )}
             {played.length > 0 && (
               <button className="hist-reset" onClick={doReset}>
-                {vi ? 'Xóa tất cả / chơi lại' : 'Clear all / reset'}
+                {t.game.clearAll}
               </button>
             )}
           </div>
