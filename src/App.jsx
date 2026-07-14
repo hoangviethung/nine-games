@@ -274,9 +274,12 @@ export default function App() {
   return (
     <div className="page">
       <header className="app-header">
-        <div>
-          <h1>Nine Games — Keywords</h1>
-          <p className="sub">{t.subtitle}</p>
+        <div className="brand">
+          <img src="/favicon.svg" alt="Nine Games" className="brand-logo" />
+          <div>
+            <h1>Nine Games — Keywords</h1>
+            <p className="sub">{t.subtitle}</p>
+          </div>
         </div>
         <button
           type="button"

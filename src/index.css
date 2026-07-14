@@ -62,6 +62,17 @@ body {
     gap: 16px;
     flex-wrap: wrap;
 }
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.brand-logo {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border-radius: 8px;
+}
 header h1 {
     font-size: 22px;
     letter-spacing: -0.01em;
@@ -720,3 +731,444 @@ th.num {
         margin-left: auto;
     }
 }
+
+/* ===== Player homepage: Tinder-style keyword swipe game ===== */
+.home {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background:
+        radial-gradient(120% 90% at 50% -10%, rgba(179, 89, 31, 0.16), transparent 60%),
+        var(--bg);
+    overflow: hidden;
+}
+.home-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    max-width: 560px;
+    width: 100%;
+    margin: 0 auto;
+}
+.home-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+.home-logo {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+}
+.home-wordmark {
+    height: 26px;
+    width: auto;
+    display: block;
+}
+@media (prefers-color-scheme: dark) {
+    .home-wordmark {
+        filter: invert(1) brightness(1.08);
+    }
+}
+.home-langs {
+    display: flex;
+    gap: 4px;
+    background: var(--chip);
+    border-radius: 999px;
+    padding: 3px;
+}
+.lang-chip {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.lang-chip.on {
+    background: var(--accent);
+    color: #fff;
+}
+
+.home-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 20px 40px;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+}
+.home-msg {
+    color: var(--muted);
+}
+
+.game {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+/* Reserved-height slot so showing the badge never shifts the deck */
+.stage-badge {
+    height: 18px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.stage-badge.show { opacity: 1; }
+
+.deck {
+    position: relative;
+    width: min(360px, 82vw);
+    height: min(500px, 62vh);
+    margin-bottom: 20px;
+}
+.kw-card {
+    position: absolute;
+    inset: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.14);
+    padding: 26px;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    will-change: transform;
+}
+.kw-card.top {
+    z-index: 3;
+}
+.kw-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.kw-cat {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.kw-card .lvl {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 11px;
+    border-radius: 999px;
+}
+.lvl-easy { color: var(--easy); background: var(--easy-bg); }
+.lvl-medium { color: var(--medium); background: var(--medium-bg); }
+.lvl-hard { color: var(--hard); background: var(--hard-bg); }
+
+.kw-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+}
+.kw-main {
+    font-size: clamp(30px, 8vw, 46px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+.kw-sub {
+    font-size: 17px;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+/* PLAY / SKIP decision tags shown while dragging */
+.decision-tag {
+    position: absolute;
+    top: 22px;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: 3px solid currentColor;
+    pointer-events: none;
+    transition: opacity 0.1s;
+}
+.decision-tag.play {
+    left: 22px;
+    color: var(--easy);
+    transform: rotate(-12deg);
+}
+.decision-tag.skip {
+    right: 22px;
+    color: var(--muted);
+    transform: rotate(12deg);
+}
+
+/* Blank card back on the peeking card (hides the next keyword) */
+.kw-card.back {
+    background: linear-gradient(160deg, var(--chip), var(--card));
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.1);
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.card-back {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.card-back-logo {
+    width: 56px;
+    height: 56px;
+    opacity: 0.35;
+    border-radius: 12px;
+}
+
+/* Accent ring drawn with box-shadow (no border-width change = no reflow) */
+.kw-card.is-playing {
+    box-shadow: 0 0 0 2px var(--accent), 0 22px 52px rgba(179, 89, 31, 0.24);
+}
+
+/* Controls: swipe pills and the finish button share one slot and crossfade */
+.controls {
+    position: relative;
+    height: 52px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.swipe-actions,
+.controls .finish-btn {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.25s ease;
+}
+/* Trendy swipe action pills */
+.swipe-actions {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    width: max-content;
+}
+.swipe-actions.gone {
+    opacity: 0;
+    pointer-events: none;
+}
+.act { white-space: nowrap; }
+.act {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    padding: 13px 24px;
+    border-radius: 999px;
+    transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.act:active { transform: scale(0.95); }
+.act-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 11px;
+}
+.act-skip {
+    background: var(--chip);
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+.act-skip .act-ico { background: rgba(0, 0, 0, 0.06); }
+.act-skip:hover { filter: brightness(0.97); color: var(--text); }
+.act-play {
+    background: linear-gradient(135deg, #8ee076, #46c268);
+    color: #06371a;
+    box-shadow: 0 10px 24px rgba(70, 194, 104, 0.38);
+}
+.act-play .act-ico {
+    background: rgba(255, 255, 255, 0.4);
+    color: #06371a;
+    padding-left: 1px;
+}
+.act-play:hover { filter: brightness(1.04); box-shadow: 0 12px 28px rgba(70, 194, 104, 0.5); }
+
+/* Empty / reset state */
+.deck-done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+}
+.deck-done-emoji { font-size: 52px; }
+.deck-done p { font-size: 20px; font-weight: 700; }
+.deal-btn {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 12px 26px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+/* Finish button (crossfades in over the swipe pills while playing) */
+.finish-btn {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 14px 34px;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+}
+.finish-btn.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Header actions + history */
+.home-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.hist-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+.hist-ico { font-size: 14px; }
+.hist-count {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.hist-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: flex-end;
+    z-index: 50;
+}
+.hist-panel {
+    width: min(380px, 90vw);
+    background: var(--bg);
+    height: 100%;
+    padding: 18px 18px 24px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.2);
+}
+.hist-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.hist-head h2 { font-size: 17px; }
+.hist-close {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+}
+.hist-empty { color: var(--muted); font-size: 14px; }
+.hist-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.hist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+.hist-name {
+    display: flex;
+    flex-direction: column;
+    font-weight: 600;
+    font-size: 14px;
+}
+.hist-sub { color: var(--muted); font-weight: 500; font-size: 12px; }
+.hist-del {
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+}
+.hist-del:hover { color: var(--hard); }
+.hist-reset {
+    margin-top: 12px;
+    border: 1px solid var(--hard);
+    background: transparent;
+    color: var(--hard);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px;
+    border-radius: 12px;
+    cursor: pointer;
+}
+.hist-reset:hover { background: var(--hard-bg); }
