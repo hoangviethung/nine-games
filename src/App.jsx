@@ -1,28 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from './supabaseClient'
-import { translations } from './i18n'
+import { useKeywords } from './useKeywords'
+import { translations, LOCALES, LANGS, PRIMARY, tr } from './i18n'
 
-const LEVEL_ORDER = { Easy: 0, Medium: 1, Hard: 2 }
 const PAGE_SIZE = 100
+const PLAYED_KEY = 'playedKeywordIds' // ids, not names — names are translatable
 
 export default function App() {
-  const [lang, setLang] = useState(
-    () => localStorage.getItem('lang') || 'en'
-  )
-  const t = translations[lang] || translations.en
+  const [lang, setLang] = useState(() => {
+    const saved = localStorage.getItem('lang')
+    return LANGS.includes(saved) ? saved : PRIMARY
+  })
+  const t = translations[lang] || translations[PRIMARY]
 
   useEffect(() => {
     localStorage.setItem('lang', lang)
     document.documentElement.lang = lang
   }, [lang])
 
-  const [rows, setRows] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const { rows, loading, error } = useKeywords()
 
   const [query, setQuery] = useState('')
-  const [activeCat, setActiveCat] = useState(null)
-  const [activeLvl, setActiveLvl] = useState(null)
+  const [activeCat, setActiveCat] = useState(null) // category id
+  const [activeLvl, setActiveLvl] = useState(null) // level id
   const [sortKey, setSortKey] = useState('index')
   const [sortDir, setSortDir] = useState(1)
   const [page, setPage] = useState(0)
@@ -33,112 +32,67 @@ export default function App() {
   const [pickerItems, setPickerItems] = useState([])
   const [pickerSel, setPickerSel] = useState(null)
   const [pickerPool, setPickerPool] = useState('all')
-  // Played keywords accumulate (by unique English name) and persist across reloads
-  const [playedNames, setPlayedNames] = useState(() => {
+  // Played keywords accumulate (by id) and persist across reloads
+  const [playedIds, setPlayedIds] = useState(() => {
     try {
-      const a = JSON.parse(localStorage.getItem('playedKeywords') || '[]')
+      const a = JSON.parse(localStorage.getItem(PLAYED_KEY) || '[]')
       return Array.isArray(a) ? a : []
     } catch {
       return []
     }
   })
   useEffect(() => {
-    localStorage.setItem('playedKeywords', JSON.stringify(playedNames))
-  }, [playedNames])
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      // PostgREST returns at most 1000 rows per request, so page through all of them.
-      const CHUNK = 1000
-      const select =
-        'id, name, vietnamese, keyword_categories(id, name, vietnamese, sort_order), keyword_levels(name, vietnamese, sort_order)'
-      let all = []
-      let from = 0
-      let fetchError = null
-      for (;;) {
-        const { data, error } = await supabase
-          .from('keywords')
-          .select(select)
-          .order('id', { ascending: true })
-          .range(from, from + CHUNK - 1)
-        if (error) {
-          fetchError = error
-          break
-        }
-        all = all.concat(data)
-        if (data.length < CHUNK) break
-        from += CHUNK
-      }
-
-      if (fetchError) {
-        setError(fetchError.message)
-      } else {
-        const mapped = all.map((r) => ({
-          english: r.name,
-          vietnamese: r.vietnamese,
-          categoryId: r.keyword_categories?.id ?? '',
-          categoryOrder: r.keyword_categories?.sort_order ?? 999,
-          category: r.keyword_categories?.name ?? '',
-          categoryVi: r.keyword_categories?.vietnamese ?? '',
-          level: r.keyword_levels?.name ?? '',
-          levelVi: r.keyword_levels?.vietnamese ?? '',
-          levelOrder: r.keyword_levels?.sort_order ?? 9,
-        }))
-        // Default order: grouped by category, then Easy → Hard, then A→Z
-        mapped.sort(
-          (a, b) =>
-            a.categoryOrder - b.categoryOrder ||
-            a.levelOrder - b.levelOrder ||
-            a.english.localeCompare(b.english)
-        )
-        mapped.forEach((r, i) => { r.index = i + 1 })
-        setRows(mapped)
-      }
-      setLoading(false)
-    }
-    load()
-  }, [])
+    localStorage.setItem(PLAYED_KEY, JSON.stringify(playedIds))
+  }, [playedIds])
 
   const categories = useMemo(() => {
     const seen = new Map()
-    rows.forEach((r) => { if (!seen.has(r.category)) seen.set(r.category, r.categoryVi) })
-    return [...seen.entries()].map(([name, vi]) => ({ name, vi }))
+    rows.forEach((r) => {
+      if (!seen.has(r.categoryId))
+        seen.set(r.categoryId, { id: r.categoryId, name: r.category, order: r.categoryOrder })
+    })
+    return [...seen.values()].sort((a, b) => a.order - b.order)
   }, [rows])
 
   const levels = useMemo(() => {
     const seen = new Map()
-    rows.forEach((r) => { if (!seen.has(r.level)) seen.set(r.level, r.levelVi) })
-    return [...seen.entries()]
-      .map(([name, vi]) => ({ name, vi }))
-      .sort((a, b) => (LEVEL_ORDER[a.name] ?? 9) - (LEVEL_ORDER[b.name] ?? 9))
+    rows.forEach((r) => {
+      if (!seen.has(r.levelId))
+        seen.set(r.levelId, { id: r.levelId, name: r.level, order: r.levelOrder })
+    })
+    return [...seen.values()].sort((a, b) => a.order - b.order)
   }, [rows])
 
   const levelCounts = useMemo(() => {
-    const c = { Easy: 0, Medium: 0, Hard: 0 }
-    rows.forEach((r) => { if (r.level in c) c[r.level]++ })
+    const c = {}
+    rows.forEach((r) => {
+      c[r.levelId] = (c[r.levelId] || 0) + 1
+    })
     return c
   }, [rows])
 
-  // Data-quality scan: flag duplicate (case-insensitive) or blank keywords.
-  // Returns a Map of row index -> human-readable reason for the problem.
+  // Data-quality scan. Duplicates are now blocked by unique indexes in the
+  // database, so this is a safety net rather than the primary defence: it flags
+  // any name duplicated within a language, and any row missing English.
   const issues = useMemo(() => {
-    const enCount = new Map()
-    const viCount = new Map()
+    const counts = new Map() // `${locale}:${lowercased name}` -> count
     for (const r of rows) {
-      const en = r.english.trim().toLowerCase()
-      const vi = r.vietnamese.trim().toLowerCase()
-      if (en) enCount.set(en, (enCount.get(en) || 0) + 1)
-      if (vi) viCount.set(vi, (viCount.get(vi) || 0) + 1)
+      for (const l of LANGS) {
+        const v = (r.name?.[l] || '').trim().toLowerCase()
+        if (v) counts.set(l + ':' + v, (counts.get(l + ':' + v) || 0) + 1)
+      }
     }
     const byIndex = new Map()
     for (const r of rows) {
-      const en = r.english.trim()
-      const vi = r.vietnamese.trim()
       const reasons = []
-      if (!en || !vi) reasons.push('missing')
-      if (en && enCount.get(en.toLowerCase()) > 1) reasons.push('dupEn')
-      if (vi && viCount.get(vi.toLowerCase()) > 1) reasons.push('dupVi')
+      if (!(r.name?.[PRIMARY] || '').trim()) reasons.push('missing')
+      for (const l of LANGS) {
+        const v = (r.name?.[l] || '').trim().toLowerCase()
+        if (v && counts.get(l + ':' + v) > 1) {
+          reasons.push('dup')
+          break
+        }
+      }
       if (reasons.length) byIndex.set(r.index, reasons)
     }
     return byIndex
@@ -148,21 +102,20 @@ export default function App() {
     const q = query.trim().toLowerCase()
     let list = rows.filter(
       (r) =>
-        (!activeCat || r.category === activeCat) &&
-        (!activeLvl || r.level === activeLvl) &&
+        (!activeCat || r.categoryId === activeCat) &&
+        (!activeLvl || r.levelId === activeLvl) &&
         (!showIssuesOnly || issues.has(r.index)) &&
-        (!q ||
-          r.english.toLowerCase().includes(q) ||
-          r.vietnamese.toLowerCase().includes(q))
+        // search matches any language, not just the one on screen
+        (!q || LANGS.some((l) => (r.name?.[l] || '').toLowerCase().includes(q)))
     )
     const sortVal = (r) => {
       switch (sortKey) {
         case 'keyword':
-          return lang === 'vi' ? r.vietnamese : r.english
+          return tr(r.name, lang)
         case 'category':
-          return lang === 'vi' ? r.categoryVi : r.category
+          return tr(r.category, lang)
         case 'level':
-          return LEVEL_ORDER[r.level] ?? 9
+          return r.levelOrder
         default:
           return r.index
       }
@@ -173,7 +126,7 @@ export default function App() {
       const cmp =
         typeof x === 'number' && typeof y === 'number'
           ? x - y
-          : String(x).localeCompare(String(y), lang === 'vi' ? 'vi' : 'en')
+          : String(x).localeCompare(String(y), lang)
       return cmp * sortDir
     })
     return list
@@ -182,11 +135,7 @@ export default function App() {
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount - 1)
   const paged = useMemo(
-    () =>
-      filtered.slice(
-        currentPage * PAGE_SIZE,
-        currentPage * PAGE_SIZE + PAGE_SIZE
-      ),
+    () => filtered.slice(currentPage * PAGE_SIZE, currentPage * PAGE_SIZE + PAGE_SIZE),
     [filtered, currentPage]
   )
 
@@ -202,7 +151,10 @@ export default function App() {
 
   function toggleSort(key) {
     if (sortKey === key) setSortDir((d) => -d)
-    else { setSortKey(key); setSortDir(1) }
+    else {
+      setSortKey(key)
+      setSortDir(1)
+    }
   }
 
   // Draw 5 distinct random rows from a pool
@@ -213,26 +165,23 @@ export default function App() {
     return [...idx].map((i) => pool[i])
   }
 
-  // Played keywords, resolved back to full rows in play order (persisted by name)
-  const rowsByName = useMemo(() => {
+  // Played keywords, resolved back to full rows in play order (persisted by id)
+  const rowsById = useMemo(() => {
     const m = new Map()
-    rows.forEach((r) => m.set(r.english, r))
+    rows.forEach((r) => m.set(r.id, r))
     return m
   }, [rows])
   const played = useMemo(
-    () => playedNames.map((n) => rowsByName.get(n)).filter(Boolean),
-    [playedNames, rowsByName]
+    () => playedIds.map((n) => rowsById.get(n)).filter(Boolean),
+    [playedIds, rowsById]
   )
-  const playedSet = useMemo(() => new Set(playedNames), [playedNames])
+  const playedSet = useMemo(() => new Set(playedIds), [playedIds])
 
   // The pool respects the active filters when they narrow things down,
   // otherwise it's the whole deck — and always excludes already-played keywords.
   const usingFilter =
-    Boolean(query.trim() || activeCat || activeLvl || showIssuesOnly) &&
-    filtered.length >= 1
-  const pickPool = (usingFilter ? filtered : rows).filter(
-    (r) => !playedSet.has(r.english)
-  )
+    Boolean(query.trim() || activeCat || activeLvl || showIssuesOnly) && filtered.length >= 1
+  const pickPool = (usingFilter ? filtered : rows).filter((r) => !playedSet.has(r.id))
 
   function openPicker() {
     if (!pickPool.length) return
@@ -248,13 +197,11 @@ export default function App() {
   function confirmPick() {
     if (pickerSel == null) return
     const chosen = pickerItems[pickerSel]
-    setPlayedNames((prev) =>
-      prev.includes(chosen.english) ? prev : [...prev, chosen.english]
-    )
+    setPlayedIds((prev) => (prev.includes(chosen.id) ? prev : [...prev, chosen.id]))
     setPickerOpen(false)
   }
-  function removePlayed(name) {
-    setPlayedNames((prev) => prev.filter((n) => n !== name))
+  function removePlayed(id) {
+    setPlayedIds((prev) => prev.filter((n) => n !== id))
   }
 
   // Close the picker on Escape
@@ -270,6 +217,13 @@ export default function App() {
     { key: 'category', label: t.cols.category },
     { key: 'level', label: t.cols.level },
   ]
+
+  // Secondary line: the English name, shown when it isn't already on screen.
+  const secondary = (value) => {
+    const main = tr(value, lang)
+    const en = value?.[PRIMARY] || ''
+    return lang !== PRIMARY && en && en !== main ? en : ''
+  }
 
   return (
     <div className="page">
@@ -303,31 +257,26 @@ export default function App() {
           <div className="played-head">
             <span className="played-title">{t.picker.playedTitle}</span>
             <span className="played-count">{played.length}</span>
-            <button
-              type="button"
-              className="played-clear"
-              onClick={() => setPlayedNames([])}
-            >
+            <button type="button" className="played-clear" onClick={() => setPlayedIds([])}>
               {t.picker.clearAll}
             </button>
           </div>
           <div className="played-list">
             {played.map((r) => (
-              <div className="played-item" key={r.english}>
+              <div className="played-item" key={r.id}>
                 <span className="pl-kw">
-                  {r.english} <span className="pl-vi">· {r.vietnamese}</span>
+                  {tr(r.name, lang)}
+                  {secondary(r.name) && <span className="pl-vi">· {secondary(r.name)}</span>}
                 </span>
                 <span className="pl-meta">
-                  {lang === 'vi' ? r.categoryVi : r.category}
-                  <span className={'lvl ' + r.level}>
-                    {t.levels[r.level] || r.level}
-                  </span>
+                  {tr(r.category, lang)}
+                  <span className={'lvl ' + r.levelId}>{tr(r.level, lang)}</span>
                 </span>
                 <button
                   type="button"
                   className="pl-del"
-                  onClick={() => removePlayed(r.english)}
-                  aria-label={`${t.picker.remove}: ${r.english}`}
+                  onClick={() => removePlayed(r.id)}
+                  aria-label={`${t.picker.remove}: ${tr(r.name, lang)}`}
                   title={t.picker.remove}
                 >
                   ×
@@ -341,9 +290,9 @@ export default function App() {
       <section className="stats">
         <Stat value={rows.length} label={t.stats.total} />
         <Stat value={categories.length} label={t.stats.categories} />
-        <Stat value={levelCounts.Easy} label={t.stats.easy} tone="easy" />
-        <Stat value={levelCounts.Medium} label={t.stats.medium} tone="medium" />
-        <Stat value={levelCounts.Hard} label={t.stats.hard} tone="hard" />
+        <Stat value={levelCounts.easy || 0} label={t.stats.easy} tone="easy" />
+        <Stat value={levelCounts.medium || 0} label={t.stats.medium} tone="medium" />
+        <Stat value={levelCounts.hard || 0} label={t.stats.hard} tone="hard" />
         <button
           type="button"
           className={
@@ -355,9 +304,7 @@ export default function App() {
           disabled={!issues.size}
           title={issues.size ? t.issuesTooltip : t.noIssuesTooltip}
         >
-          <b className={issues.size ? 'tone-hard' : 'tone-easy'}>
-            {issues.size}
-          </b>
+          <b className={issues.size ? 'tone-hard' : 'tone-easy'}>{issues.size}</b>
           <span>
             {issues.size ? '⚠ ' : '✓ '}
             {t.stats.issues}
@@ -379,18 +326,15 @@ export default function App() {
         <div className="control-group">
           <label className="control-label">{t.language}</label>
           <div className="chips">
-            <button
-              className={'chip' + (lang === 'en' ? ' on' : '')}
-              onClick={() => setLang('en')}
-            >
-              English
-            </button>
-            <button
-              className={'chip' + (lang === 'vi' ? ' on' : '')}
-              onClick={() => setLang('vi')}
-            >
-              Tiếng Việt
-            </button>
+            {LOCALES.map((l) => (
+              <button
+                key={l.code}
+                className={'chip' + (lang === l.code ? ' on' : '')}
+                onClick={() => setLang(l.code)}
+              >
+                {l.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -399,12 +343,12 @@ export default function App() {
           <div className="chips">
             {categories.map((c) => (
               <button
-                key={c.name}
-                className={'chip' + (activeCat === c.name ? ' on' : '')}
-                onClick={() => setActiveCat(activeCat === c.name ? null : c.name)}
-                title={lang === 'vi' ? c.name : c.vi}
+                key={c.id}
+                className={'chip' + (activeCat === c.id ? ' on' : '')}
+                onClick={() => setActiveCat(activeCat === c.id ? null : c.id)}
+                title={c.name?.[PRIMARY] || ''}
               >
-                {lang === 'vi' ? c.vi : c.name}
+                {tr(c.name, lang)}
               </button>
             ))}
           </div>
@@ -415,14 +359,12 @@ export default function App() {
           <div className="chips">
             {levels.map((l) => (
               <button
-                key={l.name}
-                className={
-                  'chip lvl-chip ' + l.name + (activeLvl === l.name ? ' on' : '')
-                }
-                onClick={() => setActiveLvl(activeLvl === l.name ? null : l.name)}
-                title={l.vi}
+                key={l.id}
+                className={'chip lvl-chip ' + l.id + (activeLvl === l.id ? ' on' : '')}
+                onClick={() => setActiveLvl(activeLvl === l.id ? null : l.id)}
+                title={l.name?.[PRIMARY] || ''}
               >
-                {t.levels[l.name] || l.name}
+                {tr(l.name, lang)}
               </button>
             ))}
           </div>
@@ -447,9 +389,9 @@ export default function App() {
           </thead>
           <tbody>
             {paged.map((r) => (
-              <tr key={r.index} className={issues.has(r.index) ? 'row-issue' : ''}>
+              <tr key={r.id} className={issues.has(r.index) ? 'row-issue' : ''}>
                 <td>
-                  {lang === 'vi' ? r.vietnamese : r.english}
+                  {tr(r.name, lang)}
                   {issues.has(r.index) && (
                     <span
                       className="issue-flag"
@@ -462,20 +404,16 @@ export default function App() {
                     </span>
                   )}
                 </td>
-                <td>{lang === 'vi' ? r.categoryVi : r.category}</td>
+                <td>{tr(r.category, lang)}</td>
                 <td>
-                  <span className={'lvl ' + r.level}>
-                    {t.levels[r.level] || r.level}
-                  </span>
+                  <span className={'lvl ' + r.levelId}>{tr(r.level, lang)}</span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         {loading && <div className="empty">{t.loading}</div>}
-        {!loading && filtered.length === 0 && (
-          <div className="empty">{t.noMatch}</div>
-        )}
+        {!loading && filtered.length === 0 && <div className="empty">{t.noMatch}</div>}
       </section>
 
       <div className="pagination">
@@ -488,8 +426,7 @@ export default function App() {
           ←
         </button>
         <span className="pg-info">
-          {t.pagination.page} <b>{currentPage + 1}</b> {t.pagination.of}{' '}
-          {pageCount}
+          {t.pagination.page} <b>{currentPage + 1}</b> {t.pagination.of} {pageCount}
         </span>
         <button
           className="pg-btn"
@@ -523,9 +460,7 @@ export default function App() {
                 <p className="modal-hint">
                   {t.picker.hint}{' '}
                   <span className="pool-tag">
-                    {pickerPool === 'filtered'
-                      ? t.picker.poolFiltered
-                      : t.picker.poolAll}
+                    {pickerPool === 'filtered' ? t.picker.poolFiltered : t.picker.poolAll}
                   </span>
                 </p>
               </div>
@@ -543,23 +478,19 @@ export default function App() {
               {pickerItems.map((r, i) => (
                 <button
                   type="button"
-                  key={r.index}
+                  key={r.id}
                   className={'picker-item' + (pickerSel === i ? ' selected' : '')}
                   onClick={() => setPickerSel(i)}
                   aria-pressed={pickerSel === i}
                 >
                   <span className="pi-num">{i + 1}</span>
                   <span className="pi-main">
-                    <span className="pi-en">{r.english}</span>
-                    <span className="pi-vi">{r.vietnamese}</span>
+                    <span className="pi-en">{tr(r.name, lang)}</span>
+                    {secondary(r.name) && <span className="pi-vi">{secondary(r.name)}</span>}
                   </span>
                   <span className="pi-meta">
-                    <span className="pi-cat">
-                      {lang === 'vi' ? r.categoryVi : r.category}
-                    </span>
-                    <span className={'lvl ' + r.level}>
-                      {t.levels[r.level] || r.level}
-                    </span>
+                    <span className="pi-cat">{tr(r.category, lang)}</span>
+                    <span className={'lvl ' + r.levelId}>{tr(r.level, lang)}</span>
                   </span>
                 </button>
               ))}
@@ -571,11 +502,7 @@ export default function App() {
                 {t.picker.reshuffle}
               </button>
               <div className="foot-right">
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={() => setPickerOpen(false)}
-                >
+                <button type="button" className="btn-ghost" onClick={() => setPickerOpen(false)}>
                   {t.picker.cancel}
                 </button>
                 <button
@@ -596,8 +523,7 @@ export default function App() {
 }
 
 function Stat({ value, label, tone }) {
-  const display =
-    typeof value === 'number' ? value.toLocaleString('en-US') : value
+  const display = typeof value === 'number' ? value.toLocaleString('en-US') : value
   return (
     <div className="stat">
       <b className={tone ? 'tone-' + tone : ''}>{display}</b>
