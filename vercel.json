@@ -1,5 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "$comment": "SPA fallback: React Router owns the routes, so any path that isn't a real file must serve index.html. Vercel checks the filesystem before applying rewrites, so /assets/* still resolves normally. Without this, loading /admin directly 404s.",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
