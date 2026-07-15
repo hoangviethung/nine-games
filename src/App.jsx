@@ -138,6 +138,77 @@ export default function App() {
     }
   }
 
+  const handleExport = () => {
+    const headers = [
+      'ID',
+      'Index',
+      'Category ID',
+      'Category (en)',
+      'Category (vi)',
+      'Category (ja)',
+      'Category (zh)',
+      'Category (ko)',
+      'Level ID',
+      'Level (en)',
+      'Level (vi)',
+      'Level (ja)',
+      'Level (zh)',
+      'Level (ko)',
+      'Keyword (en)',
+      'Keyword (vi)',
+      'Keyword (ja)',
+      'Keyword (zh)',
+      'Keyword (ko)',
+    ]
+
+    const csvRows = [headers.join(',')]
+
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return ''
+      const str = String(val)
+      if (/[",\n\r]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`
+      }
+      return str
+    }
+
+    filtered.forEach((r) => {
+      const row = [
+        escapeCsv(r.id),
+        escapeCsv(r.index),
+        escapeCsv(r.categoryId),
+        escapeCsv(r.category?.en || ''),
+        escapeCsv(r.category?.vi || ''),
+        escapeCsv(r.category?.ja || ''),
+        escapeCsv(r.category?.zh || ''),
+        escapeCsv(r.category?.ko || ''),
+        escapeCsv(r.levelId),
+        escapeCsv(r.level?.en || ''),
+        escapeCsv(r.level?.vi || ''),
+        escapeCsv(r.level?.ja || ''),
+        escapeCsv(r.level?.zh || ''),
+        escapeCsv(r.level?.ko || ''),
+        escapeCsv(r.name?.en || ''),
+        escapeCsv(r.name?.vi || ''),
+        escapeCsv(r.name?.ja || ''),
+        escapeCsv(r.name?.zh || ''),
+        escapeCsv(r.name?.ko || ''),
+      ]
+      csvRows.push(row.join(','))
+    })
+
+    const csvContent = '\uFEFF' + csvRows.join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `nine_games_keywords_export_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const cols = [
     { key: 'keyword', label: t.cols.keyword },
     { key: 'category', label: t.cols.category },
@@ -154,6 +225,31 @@ export default function App() {
             <p className="sub">{t.subtitle}</p>
           </div>
         </div>
+        <button
+          type="button"
+          className="export-btn"
+          onClick={handleExport}
+          disabled={loading || filtered.length === 0}
+        >
+          <svg
+            className="export-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>
+            {filtered.length === 1
+              ? t.exportLabel.replace('{count}', filtered.length)
+              : t.exportLabelPlural.replace('{count}', filtered.length)}
+          </span>
+        </button>
       </header>
 
       {error && (

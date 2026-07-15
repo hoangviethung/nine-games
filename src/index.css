@@ -38,6 +38,11 @@
     margin: 0;
     padding: 0;
 }
+button {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
 body {
     background: var(--bg);
     color: var(--text);
@@ -1304,3 +1309,40 @@ th.num {
     transition: transform 0.08s, box-shadow 0.08s;
 }
 .hist-reset:active { transform: translateY(3px); box-shadow: 0 1px 0 #b02c5d; }
+
+/* ---------- export button ---------- */
+.export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: background 0.12s, border-color 0.12s, transform 0.06s;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+}
+.export-btn:hover:not(:disabled) {
+    background: var(--chip);
+    border-color: var(--muted);
+}
+.export-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+.export-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.export-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+

@@ -5,8 +5,18 @@ import { translations, LOCALES, LANGS, PRIMARY, tr } from './i18n'
 const QUEUE_DEPTH = 3 // cards kept ready (top + 2 peeking behind)
 const SWIPE_THRESHOLD = 110 // px past which a release commits the swipe
 const HIST_KEY = 'gameHistoryIds' // keyed by keyword id (names are translatable)
-const CARD_TRANSITION =
-  'transform .32s cubic-bezier(.22,.61,.36,1), box-shadow .3s ease, opacity .3s ease'
+
+// Card physics. Tuned to feel like a real playing card rather than a UI panel:
+// a flicked card coasts away and is slowed by friction (ease-out with a long
+// tail), while a released card settles back with a little weight and overshoot.
+const FLY_MS = 520 // card flies off screen (skip)
+const SETTLE_MS = 420 // card drops back into place / next card rises
+const FLY_EASE = 'cubic-bezier(.25, .46, .45, .94)' // coast, then friction
+const SETTLE_EASE = 'cubic-bezier(.34, 1.28, .64, 1)' // settle with slight overshoot
+const FLY_TRANSITION =
+  `transform ${FLY_MS}ms ${FLY_EASE}, box-shadow .3s ease, opacity ${FLY_MS}ms ease`
+const SETTLE_TRANSITION =
+  `transform ${SETTLE_MS}ms ${SETTLE_EASE}, box-shadow .3s ease, opacity ${SETTLE_MS}ms ease`
 
 function shuffle(arr) {
   const a = arr.slice()
@@ -144,11 +154,12 @@ export default function HomePage() {
     leavingRef.current = 'right'
     dragRef.current = { x: 0, y: 0, active: false }
     forceRender()
+    // Advance only once the card has fully left, so it never pops out mid-flight.
     window.setTimeout(() => {
       leavingRef.current = null
       dragRef.current = { x: 0, y: 0, active: false }
       doSkip()
-    }, 300)
+    }, FLY_MS)
   }
   // Play: the card settles back to centre and morphs into the playing card.
   function pick() {
@@ -274,12 +285,18 @@ export default function HomePage() {
                   const draggable = isTop && !playing
                   let style
                   if (isTop) {
-                    const x = leaving ? (window.innerWidth || 1000) : drag.x
-                    const rot = leaving ? 18 : drag.x / 18
+                    // Fly a bit past the edge and tumble further, like a real flick.
+                    const x = leaving ? (window.innerWidth || 1000) * 1.15 : drag.x
+                    const rot = leaving ? 26 : drag.x / 18
                     style = {
                       zIndex: 3,
                       transform: `translate(${x}px, ${drag.y}px) rotate(${rot}deg)`,
-                      transition: drag.active && !leaving ? 'none' : CARD_TRANSITION,
+                      // 1:1 with the finger while dragging; weighty otherwise
+                      transition: drag.active
+                        ? 'none'
+                        : leaving
+                          ? FLY_TRANSITION
+                          : SETTLE_TRANSITION,
                       cursor: playing ? 'default' : drag.active ? 'grabbing' : 'grab',
                     }
                   } else {
@@ -288,7 +305,7 @@ export default function HomePage() {
                       zIndex: 3 - i,
                       transform: `translateY(${-i * 30}px) scale(${1 - i * 0.04})`,
                       opacity: playing ? 0 : 1,
-                      transition: CARD_TRANSITION,
+                      transition: SETTLE_TRANSITION,
                     }
                   }
                   return (
