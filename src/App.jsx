@@ -3,7 +3,6 @@ import { useKeywords } from './useKeywords'
 import { translations, LOCALES, LANGS, PRIMARY, tr } from './i18n'
 
 const PAGE_SIZE = 100
-const PLAYED_KEY = 'playedKeywordIds' // ids, not names — names are translatable
 
 export default function App() {
   const [lang, setLang] = useState(() => {
@@ -26,24 +25,6 @@ export default function App() {
   const [sortDir, setSortDir] = useState(1)
   const [page, setPage] = useState(0)
   const [showIssuesOnly, setShowIssuesOnly] = useState(false)
-
-  // Random keyword picker
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerItems, setPickerItems] = useState([])
-  const [pickerSel, setPickerSel] = useState(null)
-  const [pickerPool, setPickerPool] = useState('all')
-  // Played keywords accumulate (by id) and persist across reloads
-  const [playedIds, setPlayedIds] = useState(() => {
-    try {
-      const a = JSON.parse(localStorage.getItem(PLAYED_KEY) || '[]')
-      return Array.isArray(a) ? a : []
-    } catch {
-      return []
-    }
-  })
-  useEffect(() => {
-    localStorage.setItem(PLAYED_KEY, JSON.stringify(playedIds))
-  }, [playedIds])
 
   const categories = useMemo(() => {
     const seen = new Map()
@@ -157,73 +138,11 @@ export default function App() {
     }
   }
 
-  // Draw 5 distinct random rows from a pool
-  function drawFive(pool) {
-    if (pool.length <= 5) return [...pool]
-    const idx = new Set()
-    while (idx.size < 5) idx.add(Math.floor(Math.random() * pool.length))
-    return [...idx].map((i) => pool[i])
-  }
-
-  // Played keywords, resolved back to full rows in play order (persisted by id)
-  const rowsById = useMemo(() => {
-    const m = new Map()
-    rows.forEach((r) => m.set(r.id, r))
-    return m
-  }, [rows])
-  const played = useMemo(
-    () => playedIds.map((n) => rowsById.get(n)).filter(Boolean),
-    [playedIds, rowsById]
-  )
-  const playedSet = useMemo(() => new Set(playedIds), [playedIds])
-
-  // The pool respects the active filters when they narrow things down,
-  // otherwise it's the whole deck — and always excludes already-played keywords.
-  const usingFilter =
-    Boolean(query.trim() || activeCat || activeLvl || showIssuesOnly) && filtered.length >= 1
-  const pickPool = (usingFilter ? filtered : rows).filter((r) => !playedSet.has(r.id))
-
-  function openPicker() {
-    if (!pickPool.length) return
-    setPickerPool(usingFilter ? 'filtered' : 'all')
-    setPickerItems(drawFive(pickPool))
-    setPickerSel(null)
-    setPickerOpen(true)
-  }
-  function reshuffle() {
-    setPickerItems(drawFive(pickPool))
-    setPickerSel(null)
-  }
-  function confirmPick() {
-    if (pickerSel == null) return
-    const chosen = pickerItems[pickerSel]
-    setPlayedIds((prev) => (prev.includes(chosen.id) ? prev : [...prev, chosen.id]))
-    setPickerOpen(false)
-  }
-  function removePlayed(id) {
-    setPlayedIds((prev) => prev.filter((n) => n !== id))
-  }
-
-  // Close the picker on Escape
-  useEffect(() => {
-    if (!pickerOpen) return
-    const onKey = (e) => e.key === 'Escape' && setPickerOpen(false)
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [pickerOpen])
-
   const cols = [
     { key: 'keyword', label: t.cols.keyword },
     { key: 'category', label: t.cols.category },
     { key: 'level', label: t.cols.level },
   ]
-
-  // Secondary line: the English name, shown when it isn't already on screen.
-  const secondary = (value) => {
-    const main = tr(value, lang)
-    const en = value?.[PRIMARY] || ''
-    return lang !== PRIMARY && en && en !== main ? en : ''
-  }
 
   return (
     <div className="page">
@@ -235,55 +154,11 @@ export default function App() {
             <p className="sub">{t.subtitle}</p>
           </div>
         </div>
-        <button
-          type="button"
-          className="random-btn"
-          onClick={openPicker}
-          disabled={loading || !pickPool.length}
-        >
-          <span className="dice" aria-hidden="true">🎲</span>
-          {t.picker.button}
-        </button>
       </header>
 
       {error && (
         <div className="error">
           {t.errorPrefix} {error}
-        </div>
-      )}
-
-      {played.length > 0 && (
-        <div className="played">
-          <div className="played-head">
-            <span className="played-title">{t.picker.playedTitle}</span>
-            <span className="played-count">{played.length}</span>
-            <button type="button" className="played-clear" onClick={() => setPlayedIds([])}>
-              {t.picker.clearAll}
-            </button>
-          </div>
-          <div className="played-list">
-            {played.map((r) => (
-              <div className="played-item" key={r.id}>
-                <span className="pl-kw">
-                  {tr(r.name, lang)}
-                  {secondary(r.name) && <span className="pl-vi">· {secondary(r.name)}</span>}
-                </span>
-                <span className="pl-meta">
-                  {tr(r.category, lang)}
-                  <span className={'lvl ' + r.levelId}>{tr(r.level, lang)}</span>
-                </span>
-                <button
-                  type="button"
-                  className="pl-del"
-                  onClick={() => removePlayed(r.id)}
-                  aria-label={`${t.picker.remove}: ${tr(r.name, lang)}`}
-                  title={t.picker.remove}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
@@ -445,79 +320,6 @@ export default function App() {
         </span>
       </div>
 
-      {pickerOpen && (
-        <div className="modal-overlay" onClick={() => setPickerOpen(false)}>
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t.picker.title}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-head">
-              <div>
-                <h2>{t.picker.title}</h2>
-                <p className="modal-hint">
-                  {t.picker.hint}{' '}
-                  <span className="pool-tag">
-                    {pickerPool === 'filtered' ? t.picker.poolFiltered : t.picker.poolAll}
-                  </span>
-                </p>
-              </div>
-              <button
-                type="button"
-                className="modal-x"
-                onClick={() => setPickerOpen(false)}
-                aria-label={t.picker.cancel}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="picker-list">
-              {pickerItems.map((r, i) => (
-                <button
-                  type="button"
-                  key={r.id}
-                  className={'picker-item' + (pickerSel === i ? ' selected' : '')}
-                  onClick={() => setPickerSel(i)}
-                  aria-pressed={pickerSel === i}
-                >
-                  <span className="pi-num">{i + 1}</span>
-                  <span className="pi-main">
-                    <span className="pi-en">{tr(r.name, lang)}</span>
-                    {secondary(r.name) && <span className="pi-vi">{secondary(r.name)}</span>}
-                  </span>
-                  <span className="pi-meta">
-                    <span className="pi-cat">{tr(r.category, lang)}</span>
-                    <span className={'lvl ' + r.levelId}>{tr(r.level, lang)}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <div className="modal-foot">
-              <button type="button" className="btn-ghost" onClick={reshuffle}>
-                <span className="dice" aria-hidden="true">🎲</span>
-                {t.picker.reshuffle}
-              </button>
-              <div className="foot-right">
-                <button type="button" className="btn-ghost" onClick={() => setPickerOpen(false)}>
-                  {t.picker.cancel}
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={confirmPick}
-                  disabled={pickerSel === null}
-                >
-                  {t.picker.confirm}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
